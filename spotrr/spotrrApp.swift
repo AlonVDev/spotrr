@@ -9,9 +9,12 @@ import SwiftUI
 
 @main
 struct spotrrApp: App {
+    @StateObject private var store = SpottrStore()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            SpottrMainView()
+                .environmentObject(store)
         }
     }
 }

@@ -13,8 +13,8 @@ struct SpottrMainView: View {
 
     enum Tab: Int {
         case today
-        case split
         case friends
+        case settings
     }
 
     var body: some View {
@@ -25,17 +25,17 @@ struct SpottrMainView: View {
                 }
                 .tag(Tab.today)
 
-            MySplitView()
-                .tabItem {
-                    Label("My Split", systemImage: "rectangle.grid.1x2.fill")
-                }
-                .tag(Tab.split)
-
             FriendsView()
                 .tabItem {
                     Label("Friends", systemImage: "person.2.fill")
                 }
                 .tag(Tab.friends)
+
+            SettingsView()
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape.fill")
+                }
+                .tag(Tab.settings)
         }
         .tint(SpottrTheme.accent)
         .preferredColorScheme(.dark)

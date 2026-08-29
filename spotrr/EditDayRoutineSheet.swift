@@ -13,8 +13,6 @@ struct EditDayRoutineSheet: View {
 
     @State var routine: DayRoutine
     @State private var newExerciseName: String = ""
-    @State private var newExerciseSets: Int = 3
-    @State private var newExerciseReps: String = "8–10"
     @State private var newExerciseWeight: String = ""
     @State private var showAddRow: Bool = false
 
@@ -43,7 +41,26 @@ struct EditDayRoutineSheet: View {
                     if !routine.isRestDay {
                         Section {
                             ForEach($routine.exercises) { $exercise in
-                                exerciseEditRow(exercise: $exercise)
+                                HStack {
+                                    TextField("Exercise Name", text: $exercise.name)
+                                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                                        .foregroundStyle(SpottrTheme.textPrimary)
+
+                                    Spacer()
+
+                                    HStack(spacing: 4) {
+                                        TextField("Weight", text: $exercise.weight)
+                                            .font(.system(size: 14, weight: .semibold, design: .rounded))
+                                            .foregroundStyle(SpottrTheme.accent)
+                                            .multilineTextAlignment(.trailing)
+                                            .frame(width: 60)
+
+                                        Text(store.weightUnit.rawValue)
+                                            .font(.system(size: 12, weight: .bold, design: .rounded))
+                                            .foregroundStyle(SpottrTheme.textMuted)
+                                    }
+                                }
+                                .padding(.vertical, 4)
                             }
                             .onDelete { offsets in
                                 routine.exercises.remove(atOffsets: offsets)
@@ -54,7 +71,48 @@ struct EditDayRoutineSheet: View {
 
                             // Add New Exercise Row
                             if showAddRow {
-                                newExerciseInlineForm
+                                VStack(alignment: .leading, spacing: 10) {
+                                    TextField("Exercise Name (e.g. Incline Bench)", text: $newExerciseName)
+                                        .font(.system(size: 15, weight: .bold, design: .rounded))
+                                        .foregroundStyle(SpottrTheme.textPrimary)
+
+                                    HStack {
+                                        TextField("Weight (\(store.weightUnit.rawValue))", text: $newExerciseWeight)
+                                            .font(.system(size: 13, weight: .medium, design: .rounded))
+                                            .keyboardType(.numbersAndPunctuation)
+
+                                        Spacer()
+
+                                        Button("Cancel") {
+                                            withAnimation {
+                                                newExerciseName = ""
+                                                newExerciseWeight = ""
+                                                showAddRow = false
+                                            }
+                                        }
+                                        .font(.system(size: 13))
+                                        .foregroundStyle(SpottrTheme.textMuted)
+
+                                        Button("Add") {
+                                            guard !newExerciseName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+                                            routine.exercises.append(ExerciseItem(
+                                                name: newExerciseName.trimmingCharacters(in: .whitespaces),
+                                                weight: newExerciseWeight.trimmingCharacters(in: .whitespaces)
+                                            ))
+                                            newExerciseName = ""
+                                            newExerciseWeight = ""
+                                            showAddRow = false
+                                        }
+                                        .font(.system(size: 13, weight: .bold, design: .rounded))
+                                        .foregroundStyle(.black)
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 6)
+                                        .background(SpottrTheme.accent)
+                                        .clipShape(Capsule())
+                                        .disabled(newExerciseName.trimmingCharacters(in: .whitespaces).isEmpty)
+                                    }
+                                }
+                                .padding(.vertical, 6)
                             } else {
                                 Button {
                                     withAnimation(.spring(response: 0.3)) {
@@ -106,108 +164,4 @@ struct EditDayRoutineSheet: View {
             }
         }
     }
-
-    // MARK: - Exercise Edit Row
-    private func exerciseEditRow(exercise: Binding<ExerciseItem>) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            TextField("Exercise Name", text: exercise.name)
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(SpottrTheme.textPrimary)
-
-            HStack(spacing: 12) {
-                HStack(spacing: 4) {
-                    Text("Sets:")
-                        .font(.system(size: 12))
-                        .foregroundStyle(SpottrTheme.textMuted)
-                    Stepper("\(exercise.wrappedValue.sets)", value: exercise.sets, in: 1...20)
-                        .font(.system(size: 12, weight: .semibold, design: .rounded))
-                }
-
-                HStack(spacing: 4) {
-                    Text("Reps:")
-                        .font(.system(size: 12))
-                        .foregroundStyle(SpottrTheme.textMuted)
-                    TextField("8–10", text: exercise.reps)
-                        .font(.system(size: 12, weight: .medium))
-                        .frame(width: 50)
-                }
-
-                HStack(spacing: 4) {
-                    Text("Lbs:")
-                        .font(.system(size: 12))
-                        .foregroundStyle(SpottrTheme.textMuted)
-                    TextField("Weight", text: exercise.weight)
-                        .font(.system(size: 12, weight: .medium))
-                        .frame(width: 50)
-                }
-            }
-            .foregroundStyle(SpottrTheme.textSecondary)
-        }
-        .padding(.vertical, 4)
-    }
-
-    // MARK: - New Exercise Form
-    private var newExerciseInlineForm: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            TextField("Exercise Name (e.g. Incline Bench)", text: $newExerciseName)
-                .font(.system(size: 15, weight: .bold, design: .rounded))
-                .foregroundStyle(SpottrTheme.textPrimary)
-
-            HStack(spacing: 12) {
-                Stepper("Sets: \(newExerciseSets)", value: $newExerciseSets, in: 1...20)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-
-                TextField("Reps (e.g. 10)", text: $newExerciseReps)
-                    .font(.system(size: 12))
-                    .frame(width: 70)
-
-                TextField("Lbs", text: $newExerciseWeight)
-                    .font(.system(size: 12))
-                    .frame(width: 60)
-            }
-            .foregroundStyle(SpottrTheme.textSecondary)
-
-            HStack {
-                Button("Cancel") {
-                    withAnimation {
-                        resetNewExerciseForm()
-                    }
-                }
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(SpottrTheme.textMuted)
-
-                Spacer()
-
-                Button("Add to Split") {
-                    guard !newExerciseName.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                    let item = ExerciseItem(
-                        name: newExerciseName,
-                        sets: newExerciseSets,
-                        reps: newExerciseReps.isEmpty ? "10" : newExerciseReps,
-                        weight: newExerciseWeight
-                    )
-                    routine.exercises.append(item)
-                    resetNewExerciseForm()
-                }
-                .font(.system(size: 13, weight: .bold, design: .rounded))
-                .foregroundStyle(.black)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 6)
-                .background(SpottrTheme.accent)
-                .clipShape(Capsule())
-                .disabled(newExerciseName.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .padding(.top, 4)
-        }
-        .padding(.vertical, 6)
-    }
-
-    private func resetNewExerciseForm() {
-        newExerciseName = ""
-        newExerciseSets = 3
-        newExerciseReps = "8–10"
-        newExerciseWeight = ""
-        showAddRow = false
-    }
 }
-

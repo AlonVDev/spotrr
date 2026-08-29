@@ -7,6 +7,32 @@
 
 import SwiftUI
 
+// MARK: - Weight Unit
+enum WeightUnit: String, CaseIterable, Codable, Identifiable {
+    case lbs = "lbs"
+    case kg = "kg"
+
+    var id: String { rawValue }
+    var uppercaseName: String { rawValue.uppercased() }
+}
+
+// MARK: - Week Start Order
+enum WeekStart: String, CaseIterable, Codable, Identifiable {
+    case monday = "Mon – Sun"
+    case sunday = "Sun – Sat"
+
+    var id: String { rawValue }
+
+    var orderedWeekdays: [Weekday] {
+        switch self {
+        case .monday:
+            return [.monday, .tuesday, .wednesday, .thursday, .friday, .saturday, .sunday]
+        case .sunday:
+            return [.sunday, .monday, .tuesday, .wednesday, .thursday, .friday, .saturday]
+        }
+    }
+}
+
 // MARK: - Weekday
 enum Weekday: Int, CaseIterable, Codable, Identifiable, Comparable {
     case monday = 2
@@ -70,23 +96,27 @@ enum Weekday: Int, CaseIterable, Codable, Identifiable, Comparable {
     }
 }
 
-// MARK: - Simple Exercise Item
+// MARK: - Exercise Item
 struct ExerciseItem: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var name: String
-    var sets: Int = 3
-    var reps: String = "8–10"
-    var weight: String = ""
+    var weight: String = "" // e.g. "185"
+    var reps: String = ""   // e.g. "8–10"
     var isCompleted: Bool = false
-    var notes: String = ""
 
-    var detailText: String {
+    func formattedDetail(unit: WeightUnit) -> String {
         var parts: [String] = []
-        if sets > 0 {
-            parts.append("\(sets) sets × \(reps.isEmpty ? "10" : reps) reps")
+        let trimmedWeight = weight.trimmingCharacters(in: .whitespaces)
+        if !trimmedWeight.isEmpty {
+            if trimmedWeight.hasSuffix("lbs") || trimmedWeight.hasSuffix("kg") {
+                parts.append(trimmedWeight)
+            } else {
+                parts.append("\(trimmedWeight) \(unit.rawValue)")
+            }
         }
-        if !weight.isEmpty {
-            parts.append(weight.hasSuffix("lbs") || weight.hasSuffix("kg") ? weight : "\(weight) lbs")
+        let trimmedReps = reps.trimmingCharacters(in: .whitespaces)
+        if !trimmedReps.isEmpty {
+            parts.append("\(trimmedReps) reps")
         }
         return parts.joined(separator: " • ")
     }

@@ -9,27 +9,27 @@ import SwiftUI
 
 struct SpottrMainView: View {
     @EnvironmentObject var store: SpottrStore
-    @State private var selectedTab: Tab = .today
+    @State private var selectedTab: Tab = .split
 
     enum Tab: Int {
-        case today
-        case friends
+        case split
+        case buddies
         case settings
     }
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            TodayView()
+            SplitView()
                 .tabItem {
-                    Label("Today", systemImage: "calendar")
+                    Label("Split", systemImage: "dumbbell.fill")
                 }
-                .tag(Tab.today)
+                .tag(Tab.split)
 
-            FriendsView()
+            BuddiesView()
                 .tabItem {
-                    Label("Friends", systemImage: "person.2.fill")
+                    Label("Buddies", systemImage: "person.2.fill")
                 }
-                .tag(Tab.friends)
+                .tag(Tab.buddies)
 
             SettingsView()
                 .tabItem {

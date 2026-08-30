@@ -1,5 +1,5 @@
 //
-//  FriendsView.swift
+//  BuddiesView.swift
 //  spotrr
 //
 //  Created by Spottr on 28/08/2026.
@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct FriendsView: View {
+struct BuddiesView: View {
     @EnvironmentObject var store: SpottrStore
 
     var body: some View {
@@ -17,8 +17,8 @@ struct FriendsView: View {
 
                 ScrollView {
                     VStack(spacing: 12) {
-                        ForEach(store.friends) { friend in
-                            friendCard(friend: friend)
+                        ForEach(store.buddies) { buddy in
+                            buddyCard(buddy: buddy)
                         }
 
                         Spacer().frame(height: 30)
@@ -27,38 +27,38 @@ struct FriendsView: View {
                     .padding(.vertical, 12)
                 }
             }
-            .navigationTitle("Friends")
+            .navigationTitle("Buddies")
         }
     }
 
-    private func friendCard(friend: FriendStatus) -> some View {
+    private func buddyCard(buddy: FriendStatus) -> some View {
         HStack(spacing: 12) {
             // Initials Avatar
             Circle()
                 .fill(SpottrTheme.cardSubtle)
                 .frame(width: 44, height: 44)
                 .overlay(
-                    Text(friend.initials)
+                    Text(buddy.initials)
                         .font(.system(size: 14, weight: .black, design: .rounded))
                         .foregroundStyle(SpottrTheme.accent)
                 )
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(friend.name)
+                Text(buddy.name)
                     .font(.system(size: 15, weight: .bold, design: .rounded))
                     .foregroundStyle(SpottrTheme.textPrimary)
 
                 HStack(spacing: 6) {
-                    Text(friend.splitTitle)
+                    Text(buddy.splitTitle)
                         .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(friend.isRestDay ? SpottrTheme.green : SpottrTheme.textSecondary)
+                        .foregroundStyle(buddy.isRestDay ? SpottrTheme.green : SpottrTheme.textSecondary)
 
-                    if !friend.isRestDay && friend.totalCount > 0 {
+                    if !buddy.isRestDay && buddy.totalCount > 0 {
                         Text("•")
                             .foregroundStyle(SpottrTheme.textMuted)
-                        Text("\(friend.completedCount)/\(friend.totalCount) done")
+                        Text("\(buddy.completedCount)/\(buddy.totalCount) done")
                             .font(.system(size: 12, weight: .semibold, design: .rounded))
-                            .foregroundStyle(friend.completedCount == friend.totalCount ? SpottrTheme.accent : SpottrTheme.textMuted)
+                            .foregroundStyle(buddy.completedCount == buddy.totalCount ? SpottrTheme.accent : SpottrTheme.textMuted)
                     }
                 }
             }
@@ -68,17 +68,17 @@ struct FriendsView: View {
             // Fist-bump button
             Button {
                 withAnimation(.spring(response: 0.25)) {
-                    store.toggleFistBump(for: friend.id)
+                    store.toggleFistBump(for: buddy.id)
                 }
             } label: {
                 Text("👊")
                     .font(.system(size: 18))
                     .padding(10)
-                    .background(friend.hasBumped ? SpottrTheme.accentMuted : SpottrTheme.cardSubtle)
+                    .background(buddy.hasBumped ? SpottrTheme.accentMuted : SpottrTheme.cardSubtle)
                     .clipShape(Circle())
                     .overlay(
                         Circle()
-                            .stroke(friend.hasBumped ? SpottrTheme.accent.opacity(0.5) : Color.clear, lineWidth: 1)
+                            .stroke(buddy.hasBumped ? SpottrTheme.accent.opacity(0.5) : Color.clear, lineWidth: 1)
                     )
             }
             .buttonStyle(.plain)
@@ -88,7 +88,7 @@ struct FriendsView: View {
 }
 
 #Preview {
-    FriendsView()
+    BuddiesView()
         .environmentObject(SpottrStore())
 }
 

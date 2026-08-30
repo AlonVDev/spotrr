@@ -139,7 +139,7 @@ struct DayRoutine: Identifiable, Codable, Hashable {
     }
 }
 
-// MARK: - Friend Split Status
+// MARK: - Buddy Split Status
 struct FriendStatus: Identifiable, Codable, Hashable {
     var id: UUID = UUID()
     var name: String

@@ -39,7 +39,7 @@ final class SpottrStore: ObservableObject {
         }
     }
 
-    @Published var friends: [FriendStatus] = [
+    @Published var buddies: [FriendStatus] = [
         FriendStatus(
             name: "Marcus Chen",
             handle: "@marcus_c",
@@ -274,9 +274,9 @@ final class SpottrStore: ObservableObject {
         triggerHaptic(.medium)
     }
 
-    func toggleFistBump(for friendId: UUID) {
-        guard let index = friends.firstIndex(where: { $0.id == friendId }) else { return }
-        friends[index].hasBumped.toggle()
+    func toggleFistBump(for buddyId: UUID) {
+        guard let index = buddies.firstIndex(where: { $0.id == buddyId }) else { return }
+        buddies[index].hasBumped.toggle()
         triggerHaptic(.medium)
     }
 

@@ -1,5 +1,5 @@
 //
-//  TodayView.swift
+//  SplitView.swift
 //  spotrr
 //
 //  Created by Spottr on 28/08/2026.
@@ -7,7 +7,7 @@
 
 import SwiftUI
 
-struct TodayView: View {
+struct SplitView: View {
     @EnvironmentObject var store: SpottrStore
     @State private var showEditSheet: Bool = false
 
@@ -143,7 +143,7 @@ struct TodayView: View {
     private var headerCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .center) {
-                Text(isToday ? "\(store.selectedWeekday.fullName.uppercased()) • TODAY" : store.selectedWeekday.fullName.uppercased())
+                Text(isToday ? "\(store.selectedWeekday.fullName.uppercased()) • SPLIT" : store.selectedWeekday.fullName.uppercased())
                     .font(.system(size: 11, weight: .heavy, design: .rounded))
                     .foregroundStyle(SpottrTheme.textMuted)
                     .tracking(1.2)
@@ -470,6 +470,6 @@ struct QuickExerciseEditSheet: View {
 }
 
 #Preview {
-    TodayView()
+    SplitView()
         .environmentObject(SpottrStore())
 }

@@ -9,7 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @EnvironmentObject var store: SpottrStore
-    @State private var showResetConfirmation: Bool = false
+    @State private var showClearConfirmation: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -33,7 +33,7 @@ struct SettingsView: View {
                         }
 
                         HStack {
-                            Label("Week Format", systemImage: "calendar")
+                            Label("First Day of Week", systemImage: "calendar")
                                 .foregroundStyle(SpottrTheme.textPrimary)
                             Spacer()
                             Picker("", selection: $store.weekStart) {
@@ -41,8 +41,8 @@ struct SettingsView: View {
                                     Text(start.rawValue).tag(start)
                                 }
                             }
-                            .pickerStyle(.menu)
-                            .tint(SpottrTheme.accent)
+                            .pickerStyle(.segmented)
+                            .frame(width: 140)
                         }
 
                         Toggle(isOn: $store.autoResetDaily) {
@@ -73,9 +73,9 @@ struct SettingsView: View {
                         }
 
                         Button(role: .destructive) {
-                            showResetConfirmation = true
+                            showClearConfirmation = true
                         } label: {
-                            Label("Reset to Default Split", systemImage: "trash")
+                            Label("Clear Split", systemImage: "trash")
                                 .foregroundStyle(.red)
                         }
                     } header: {
@@ -104,13 +104,13 @@ struct SettingsView: View {
                 .scrollContentBackground(.hidden)
             }
             .navigationTitle("Settings")
-            .alert("Reset to Default Split?", isPresented: $showResetConfirmation) {
+            .alert("Clear Split?", isPresented: $showClearConfirmation) {
                 Button("Cancel", role: .cancel) { }
-                Button("Reset", role: .destructive) {
-                    store.resetToDefaultSplit()
+                Button("Clear", role: .destructive) {
+                    store.clearSplit()
                 }
             } message: {
-                Text("This will replace your current weekly schedule with the starter template.")
+                Text("This will remove every workout, rest day, and exercise from your split.")
             }
         }
     }

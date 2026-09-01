@@ -109,7 +109,7 @@ final class SpottrStore: ObservableObject {
         }
 
         if !loadFromStorage() {
-            setupDefaultRoutines()
+            setupEmptyRoutines()
         }
 
         checkAndPerformDailyReset()
@@ -132,87 +132,15 @@ final class SpottrStore: ObservableObject {
         UserDefaults.standard.set(todayStr, forKey: lastDateKey)
     }
 
-    // MARK: - Default Starter Setup
-    private func setupDefaultRoutines() {
-        routines = [
-            .monday: DayRoutine(
-                weekday: .monday,
-                title: "Chest & Triceps",
-                isRestDay: false,
-                exercises: [
-                    ExerciseItem(name: "Barbell Bench Press", weight: "185", reps: "6–8"),
-                    ExerciseItem(name: "Incline Dumbbell Press", weight: "70", reps: "8–10"),
-                    ExerciseItem(name: "Cable Chest Flyes", weight: "35", reps: "12"),
-                    ExerciseItem(name: "Triceps Rope Pushdown", weight: "55", reps: "12–15"),
-                    ExerciseItem(name: "Overhead Dumbbell Extension", weight: "60", reps: "10")
-                ]
-            ),
-            .tuesday: DayRoutine(
-                weekday: .tuesday,
-                title: "Back & Biceps",
-                isRestDay: false,
-                exercises: [
-                    ExerciseItem(name: "Conventional Deadlift", weight: "315", reps: "5"),
-                    ExerciseItem(name: "Barbell Bent-Over Row", weight: "165", reps: "8"),
-                    ExerciseItem(name: "Lat Pulldown (Wide Grip)", weight: "140", reps: "10"),
-                    ExerciseItem(name: "Incline Dumbbell Curls", weight: "35", reps: "10–12"),
-                    ExerciseItem(name: "Hammer Curls", weight: "40", reps: "12")
-                ]
-            ),
-            .wednesday: DayRoutine(
-                weekday: .wednesday,
-                title: "Legs & Abs",
-                isRestDay: false,
-                exercises: [
-                    ExerciseItem(name: "Barbell Back Squat", weight: "245", reps: "6–8"),
-                    ExerciseItem(name: "Romanian Deadlift (RDL)", weight: "205", reps: "10"),
-                    ExerciseItem(name: "Leg Press", weight: "450", reps: "12"),
-                    ExerciseItem(name: "Lying Leg Curls", weight: "90", reps: "12"),
-                    ExerciseItem(name: "Hanging Leg Raises", weight: "", reps: "15")
-                ]
-            ),
-            .thursday: DayRoutine(
-                weekday: .thursday,
-                title: "Rest & Recovery",
-                isRestDay: true,
-                exercises: []
-            ),
-            .friday: DayRoutine(
-                weekday: .friday,
-                title: "Shoulders & Arms",
-                isRestDay: false,
-                exercises: [
-                    ExerciseItem(name: "Overhead Barbell Press", weight: "115", reps: "8"),
-                    ExerciseItem(name: "Dumbbell Lateral Raises", weight: "25", reps: "15"),
-                    ExerciseItem(name: "Rear Delt Reverse Flyes", weight: "20", reps: "15"),
-                    ExerciseItem(name: "EZ-Bar Preacher Curls", weight: "65", reps: "10"),
-                    ExerciseItem(name: "Skull Crushers", weight: "75", reps: "10")
-                ]
-            ),
-            .saturday: DayRoutine(
-                weekday: .saturday,
-                title: "Full Body",
-                isRestDay: false,
-                exercises: [
-                    ExerciseItem(name: "Weighted Pull-Ups", weight: "25", reps: "8"),
-                    ExerciseItem(name: "Dumbbell Incline Bench", weight: "75", reps: "10"),
-                    ExerciseItem(name: "Bulgarian Split Squats", weight: "45", reps: "10"),
-                    ExerciseItem(name: "Cable Face Pulls", weight: "50", reps: "15")
-                ]
-            ),
-            .sunday: DayRoutine(
-                weekday: .sunday,
-                title: "Rest Day",
-                isRestDay: true,
-                exercises: []
-            )
-        ]
+    // MARK: - Empty Starter Setup
+    private func setupEmptyRoutines() {
+        routines = [:]
     }
 
     // MARK: - Routine Queries & Actions
 
     func routine(for weekday: Weekday) -> DayRoutine {
-        routines[weekday] ?? DayRoutine(weekday: weekday, title: "Workout Day", isRestDay: false, exercises: [])
+        routines[weekday] ?? DayRoutine(weekday: weekday, title: "", isRestDay: false, exercises: [])
     }
 
     func updateRoutine(_ updated: DayRoutine) {
@@ -304,8 +232,8 @@ final class SpottrStore: ObservableObject {
         return output
     }
 
-    func resetToDefaultSplit() {
-        setupDefaultRoutines()
+    func clearSplit() {
+        setupEmptyRoutines()
         triggerHaptic(.medium)
     }
 

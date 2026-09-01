@@ -18,8 +18,8 @@ enum WeightUnit: String, CaseIterable, Codable, Identifiable {
 
 // MARK: - Week Start Order
 enum WeekStart: String, CaseIterable, Codable, Identifiable {
-    case monday = "Mon – Sun"
-    case sunday = "Sun – Sat"
+    case monday = "MON"
+    case sunday = "SUN"
 
     var id: String { rawValue }
 

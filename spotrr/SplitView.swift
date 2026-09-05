@@ -60,48 +60,11 @@ struct SplitView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                 ToolbarItem(placement: .topBarLeading) {
-                     if !isToday {
-                         Button("Today") {
-                             select(weekday: Weekday.today())
-                         }
-                         .font(.system(size: 13, weight: .bold, design: .rounded))
-                         .foregroundStyle(SpottrTheme.accent)
-                     }
-                 }
-
-                 ToolbarItem(placement: .topBarTrailing) {
-                     if !currentRoutine.isRestDay && currentRoutine.totalCount > 0 && currentRoutine.completedCount > 0 {
-                         Button {
-                             withAnimation(.spring(response: 0.25)) {
-                                 store.resetDayChecks(for: store.selectedWeekday)
-                             }
-                         } label: {
-                             Label("Reset", systemImage: "arrow.counterclockwise")
-                         }
-                         .accessibilityLabel("Reset checks")
-                         .foregroundStyle(SpottrTheme.textSecondary)
-                     }
-                 }
-
-                 ToolbarItem(placement: .topBarTrailing) {
-                     Button {
-                         withAnimation(.spring(response: 0.3)) {
-                             store.toggleRestDay(for: store.selectedWeekday)
-                         }
-                     } label: {
-                         Label(currentRoutine.isRestDay ? "Workout" : "Rest", systemImage: currentRoutine.isRestDay ? "dumbbell.fill" : "bed.double.fill")
-                     }
-                     .font(.system(size: 13, weight: .bold, design: .rounded))
-                     .foregroundStyle(SpottrTheme.accent)
-                 }
-            }
         }
     }
 
     private var weekdaySelectorStrip: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
             ForEach(store.orderedWeekdays) { weekday in
                 let isSelected = store.selectedWeekday == weekday
                 let isCurrentDay = Weekday.today() == weekday
@@ -110,17 +73,17 @@ struct SplitView: View {
                 Button {
                     select(weekday: weekday)
                 } label: {
-                    VStack(spacing: 5) {
+                    VStack(spacing: 6) {
                         Text(weekday.singleLetter)
-                            .font(.system(size: 12, weight: .black, design: .rounded))
+                            .font(.system(size: 18, weight: .black, design: .rounded))
                             .foregroundStyle(isSelected ? .black : (isCurrentDay ? SpottrTheme.accent : SpottrTheme.textSecondary))
 
                         Circle()
                             .fill(isSelected ? .black : (dayRoutine.isRestDay ? SpottrTheme.textMuted.opacity(0.3) : SpottrTheme.accent))
-                            .frame(width: 5, height: 5)
+                            .frame(width: 6, height: 6)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 12)
                     .background(isSelected ? SpottrTheme.accent : SpottrTheme.card)
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .overlay {
@@ -150,11 +113,27 @@ struct SplitView: View {
                 }
             }
 
-            TextField(currentRoutine.isRestDay ? "Rest Day" : "Workout Day", text: titleBinding)
-                .font(.system(size: 26, weight: .black, design: .rounded))
-                .foregroundStyle(currentRoutine.isRestDay ? SpottrTheme.green : SpottrTheme.textPrimary)
-                .focused($focusedField, equals: .title)
-                .submitLabel(.done)
+            HStack(alignment: .center, spacing: 12) {
+                TextField(currentRoutine.isRestDay ? "Rest Day" : "Workout Day", text: titleBinding)
+                    .font(.system(size: 26, weight: .black, design: .rounded))
+                    .foregroundStyle(currentRoutine.isRestDay ? SpottrTheme.restColor : SpottrTheme.textPrimary)
+                    .focused($focusedField, equals: .title)
+                    .submitLabel(.done)
+
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        store.toggleRestDay(for: store.selectedWeekday)
+                    }
+                } label: {
+                    Image(systemName: currentRoutine.isRestDay ? "dumbbell.fill" : "bed.double.fill")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundStyle(currentRoutine.isRestDay ? SpottrTheme.accent : SpottrTheme.restColor)
+                        .frame(width: 38, height: 38)
+                        .background(SpottrTheme.cardSubtle)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+            }
 
             if !currentRoutine.isRestDay && currentRoutine.totalCount > 0 {
                 GeometryReader { geo in
@@ -309,14 +288,14 @@ struct SplitView: View {
         VStack(spacing: 12) {
             Image(systemName: "bed.double.fill")
                 .font(.system(size: 36))
-                .foregroundStyle(SpottrTheme.green)
+                .foregroundStyle(SpottrTheme.restColor)
                 .padding(.top, 8)
 
             Text("Rest & Recovery")
                 .font(.system(size: 18, weight: .bold, design: .rounded))
                 .foregroundStyle(SpottrTheme.textPrimary)
 
-            Text("Tap \"Make Workout Day\" above whenever you are ready to add exercises.")
+            Text("Tap the dumbbell icon above to switch to a workout day.")
                 .font(.system(size: 13))
                 .foregroundStyle(SpottrTheme.textSecondary)
                 .multilineTextAlignment(.center)

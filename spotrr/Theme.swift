@@ -9,9 +9,9 @@ import SwiftUI
 
 struct SpottrTheme {
     // Clean, high-contrast neon accent
-    static let accent = Color(red: 0, green: 0.77, blue: 1) // Electric Lime #D4FB34
+    static let accent = Color(red: 0, green: 0.77, blue: 1) // #00c5ff
     static let accentMuted = Color(red: 0.83, green: 0.98, blue: 0.20).opacity(0.15)
-    static let green = Color(red: 0.22, green: 0.88, blue: 0.55)  // Rest Day Green
+    static let restColor = Color(red: 0, green: 0.5, blue: 1)  // #009dff
 
     // Backgrounds & Cards (Ultra-clean dark mode)
     static let background = Color(red: 0.06, green: 0.06, blue: 0.08)

@@ -51,7 +51,7 @@ struct BuddiesView: View {
                 HStack(spacing: 6) {
                     Text(buddy.splitTitle)
                         .font(.system(size: 13, weight: .medium, design: .rounded))
-                        .foregroundStyle(buddy.isRestDay ? SpottrTheme.green : SpottrTheme.textSecondary)
+                        .foregroundStyle(buddy.isRestDay ? SpottrTheme.restColor : SpottrTheme.textSecondary)
 
                     if !buddy.isRestDay && buddy.totalCount > 0 {
                         Text("•")

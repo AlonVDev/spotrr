@@ -215,20 +215,16 @@ final class SpottrStore: ObservableObject {
 
     // MARK: - Export Split (Notes Style)
     func exportSplitAsText() -> String {
-        var output = "📋 MY WORKOUT SPLIT (via Spottr)\n\n"
+        var output = "My Weekly Split on Spottr 🏋️‍♂️\n\n"
+        
         for weekday in orderedWeekdays {
             let r = routine(for: weekday)
-            output += "▶ \(weekday.fullName.uppercased()): \(r.title.isEmpty ? (r.isRestDay ? "Rest Day" : "Workout Day") : r.title)\n"
-            if r.isRestDay || r.exercises.isEmpty {
-                output += "   (Rest & Recovery)\n\n"
-            } else {
-                for ex in r.exercises {
-                    let weightText = ex.weight.isEmpty ? "" : " @ \(ex.weight) \(weightUnit.rawValue)"
-                    output += "   • \(ex.name)\(weightText)\n"
-                }
-                output += "\n"
-            }
+            let dayName = String(weekday.fullName.prefix(3))
+            let splitTitle = r.isRestDay ? "Rest Day" : (r.title.isEmpty ? "Workout" : r.title)
+            
+            output += "\(dayName): \(splitTitle)\n"
         }
+        
         return output
     }
 

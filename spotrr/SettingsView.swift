@@ -66,7 +66,7 @@ struct SettingsView: View {
                         ShareLink(
                             item: store.exportSplitAsText(),
                             subject: Text("My Gym Split"),
-                            message: Text("Here is my weekly workout split organized in Spottr!")
+                            message: Text("\n Join my workout on Spottr!")
                         ) {
                             Label("Share Split with Buddy", systemImage: "square.and.arrow.up.fill")
                                 .foregroundStyle(SpottrTheme.textPrimary)

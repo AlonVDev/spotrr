@@ -9,14 +9,14 @@ import SwiftUI
 
 struct SpottrTheme {
     // Clean, high-contrast neon accent
-    static let accent = Color(hex: "#38E08C") // Mint Green
-    static let accentMuted = Color(hex: "#38E08C").opacity(0.15)
-    static let restColor = Color(hex: "#009DFF") // Rest Day Blue
+    static let accent = Color.blue //(hex: "#38E08C") // Mint Green
+    static let accentMuted = Color.blue.opacity(0.15) //(hex: "#38E08C").opacity(0.15)
+    static let restColor = Color.white //(hex: "#009DFF") // Rest Day Blue
 
     // Backgrounds & Cards (Ultra-clean dark mode)
-    static let background = Color(hex: "#0F0F14")
-    static let card = Color(hex: "#1C1C24")
-    static let cardSubtle = Color(hex: "#26262E")
+    static let background = Color.black //(hex: "#0F0F14")
+    static let card = Color(white: 0.06) //(hex: "#1C1C24")
+    static let cardSubtle = Color(white: 0.03) //(hex: "#26262E")
     static let border = Color.white.opacity(0.08)
 
     // Typography Colors

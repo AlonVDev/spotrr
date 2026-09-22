@@ -147,6 +147,26 @@ final class SpottrStore: ObservableObject {
         routines[updated.weekday] = updated
     }
 
+    func copyRoutine(from sourceWeekday: Weekday, to targetWeekday: Weekday) {
+        guard let source = routines[sourceWeekday] else { return }
+
+        let copiedExercises = source.exercises.map { ex in
+            ExerciseItem(
+                name: ex.name,
+                weight: ex.weight,
+                reps: ex.reps,
+                isCompleted: false
+            )
+        }
+
+        var target = routine(for: targetWeekday)
+        target.title = source.title
+        target.isRestDay = false
+        target.exercises = copiedExercises
+        routines[targetWeekday] = target
+        triggerHaptic(.medium)
+    }
+
     func addExercise(to weekday: Weekday, name: String, weight: String = "", reps: String = "") {
         let cleanName = name.trimmingCharacters(in: .whitespaces)
         guard !cleanName.isEmpty else { return }
@@ -173,6 +193,37 @@ final class SpottrStore: ObservableObject {
     func deleteExercise(from weekday: Weekday, exerciseId: UUID) {
         guard var r = routines[weekday] else { return }
         r.exercises.removeAll(where: { $0.id == exerciseId })
+        routines[weekday] = r
+        triggerHaptic(.light)
+    }
+
+    func moveExercise(in weekday: Weekday, exerciseId: UUID, direction: Int) {
+        guard var r = routines[weekday],
+              let currentIndex = r.exercises.firstIndex(where: { $0.id == exerciseId }) else { return }
+
+        let targetIndex = currentIndex + direction
+        guard r.exercises.indices.contains(targetIndex) else { return }
+
+        r.exercises.swapAt(currentIndex, targetIndex)
+        routines[weekday] = r
+        triggerHaptic(.light)
+    }
+
+    func moveExercise(in weekday: Weekday, fromIndex: Int, toIndex: Int) {
+        guard var r = routines[weekday],
+              fromIndex != toIndex,
+              r.exercises.indices.contains(fromIndex),
+              r.exercises.indices.contains(toIndex) else { return }
+
+        let item = r.exercises.remove(at: fromIndex)
+        r.exercises.insert(item, at: toIndex)
+        routines[weekday] = r
+        triggerHaptic(.light)
+    }
+
+    func reorderExercises(for weekday: Weekday, from source: IndexSet, to destination: Int) {
+        guard var r = routines[weekday] else { return }
+        r.exercises.move(fromOffsets: source, toOffset: destination)
         routines[weekday] = r
         triggerHaptic(.light)
     }

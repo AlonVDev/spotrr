@@ -2,8 +2,11 @@
 //  SplitView.swift
 //  spotrr
 //
+//  Created by Spottr on 28/08/2026.
+//
 
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SplitView: View {
     @EnvironmentObject var store: SpottrStore
@@ -12,6 +15,8 @@ struct SplitView: View {
     @State private var editingExerciseID: UUID?
     @State private var exerciseName = ""
     @State private var exerciseWeight = ""
+    @State private var isReordering = false
+    @State private var draggedExerciseID: UUID?
     @FocusState private var focusedField: Field?
 
     private enum Field: Hashable {
@@ -114,11 +119,33 @@ struct SplitView: View {
             }
 
             HStack(alignment: .center, spacing: 12) {
-                TextField(currentRoutine.isRestDay ? "Rest Day" : "Workout Day", text: titleBinding)
-                    .font(.system(size: 26, weight: .black, design: .rounded))
-                    .foregroundStyle(currentRoutine.isRestDay ? SpottrTheme.restColor : SpottrTheme.textPrimary)
-                    .focused($focusedField, equals: .title)
-                    .submitLabel(.done)
+                ZStack(alignment: .leading) {
+                    TextField(currentRoutine.isRestDay ? "Rest Day" : "Workout Day", text: titleBinding)
+                        .font(.system(size: 26, weight: .black, design: .rounded))
+                        .foregroundStyle(currentRoutine.isRestDay ? SpottrTheme.restColor : SpottrTheme.textPrimary)
+                        .focused($focusedField, equals: .title)
+                        .submitLabel(.done)
+
+                    if !currentRoutine.isRestDay && currentRoutine.title.trimmingCharacters(in: .whitespaces).isEmpty {
+                        HStack(spacing: 6) {
+                            Text("Workout Day")
+                                .font(.system(size: 26, weight: .black, design: .rounded))
+                                .opacity(0)
+                                .allowsHitTesting(false)
+
+                            Menu {
+                                copyWorkoutDaysMenu
+                            } label: {
+                                Image(systemName: "chevron.down")
+                                    .font(.system(size: 14, weight: .black, design: .rounded))
+                                    .foregroundStyle(SpottrTheme.textMuted)
+                                    .padding(.vertical, 8)
+                                    .padding(.horizontal, 4)
+                                    .contentShape(Rectangle())
+                            }
+                        }
+                    }
+                }
 
                 Button {
                     withAnimation(.spring(response: 0.3)) {
@@ -152,37 +179,80 @@ struct SplitView: View {
 
     private var exercisesSection: some View {
         VStack(spacing: 10) {
-            ForEach(currentRoutine.exercises) { exercise in
-                if editingExerciseID == exercise.id {
-                    inlineExerciseEditor
-                } else {
-                    exerciseRow(exercise)
+            if !currentRoutine.exercises.isEmpty {
+                HStack {
+                    Text("EXERCISES (\(currentRoutine.exercises.count))")
+                        .font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .foregroundStyle(SpottrTheme.textMuted)
+                        .tracking(1.2)
+
+                    Spacer()
+
+                    if currentRoutine.exercises.count > 1 {
+                        Button {
+                            withAnimation(.spring(response: 0.3)) {
+                                isReordering.toggle()
+                                if isReordering {
+                                    cancelExerciseEditing()
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: isReordering ? "checkmark" : "arrow.up.arrow.down")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text(isReordering ? "Done" : "Reorder")
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                            }
+                            .foregroundStyle(isReordering ? SpottrTheme.accent : SpottrTheme.textSecondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 5)
+                            .background(isReordering ? SpottrTheme.accent.opacity(0.15) : SpottrTheme.cardSubtle)
+                            .clipShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
+                .padding(.horizontal, 4)
+                .padding(.top, 2)
             }
 
-            if isAddingExercise {
-                inlineExerciseEditor
+            if isReordering {
+                ForEach(Array(currentRoutine.exercises.enumerated()), id: \.element.id) { index, exercise in
+                    reorderExerciseRow(exercise, index: index)
+                }
             } else {
-                Button {
-                    beginAddingExercise()
-                } label: {
-                    HStack(spacing: 8) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 16, weight: .bold))
-                        Text("Add Exercise")
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                    }
-                    .foregroundStyle(SpottrTheme.accent)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(SpottrTheme.card)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(SpottrTheme.accent.opacity(0.3), lineWidth: 1)
+                ForEach(currentRoutine.exercises) { exercise in
+                    if editingExerciseID == exercise.id {
+                        inlineExerciseEditor
+                    } else {
+                        exerciseRow(exercise)
                     }
                 }
-                .buttonStyle(.plain)
+
+                if isAddingExercise {
+                    inlineExerciseEditor
+                } else {
+                    Button {
+                        beginAddingExercise()
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 16, weight: .bold))
+                            Text("Add Exercise")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                        }
+                        .foregroundStyle(SpottrTheme.accent)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(SpottrTheme.card)
+                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(SpottrTheme.accent.opacity(0.3), lineWidth: 1)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
@@ -231,6 +301,132 @@ struct SplitView: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(exercise.isCompleted ? SpottrTheme.accent.opacity(0.3) : SpottrTheme.border, lineWidth: 1)
         }
+        .onDrag {
+            draggedExerciseID = exercise.id
+            return NSItemProvider(object: exercise.id.uuidString as NSString)
+        }
+        .onDrop(of: [UTType.text], delegate: ExerciseDropDelegate(
+            item: exercise,
+            currentRoutine: currentRoutine,
+            draggedExerciseID: $draggedExerciseID,
+            moveAction: { fromIdx, toIdx in
+                withAnimation(.spring(response: 0.3)) {
+                    store.moveExercise(in: store.selectedWeekday, fromIndex: fromIdx, toIndex: toIdx)
+                }
+            }
+        ))
+        .contextMenu {
+            if let currentIndex = currentRoutine.exercises.firstIndex(where: { $0.id == exercise.id }) {
+                if currentIndex > 0 {
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            store.moveExercise(in: store.selectedWeekday, exerciseId: exercise.id, direction: -1)
+                        }
+                    } label: {
+                        Label("Move Up", systemImage: "arrow.up")
+                    }
+                }
+
+                if currentIndex < currentRoutine.exercises.count - 1 {
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            store.moveExercise(in: store.selectedWeekday, exerciseId: exercise.id, direction: 1)
+                        }
+                    } label: {
+                        Label("Move Down", systemImage: "arrow.down")
+                    }
+                }
+            }
+
+            Button {
+                beginEditing(exercise)
+            } label: {
+                Label("Edit", systemImage: "pencil")
+            }
+
+            Button(role: .destructive) {
+                store.deleteExercise(from: store.selectedWeekday, exerciseId: exercise.id)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
+    }
+
+    private func reorderExerciseRow(_ exercise: ExerciseItem, index: Int) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(SpottrTheme.textMuted)
+                .frame(width: 24)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(exercise.name)
+                    .font(.system(size: 15, weight: .bold, design: .rounded))
+                    .foregroundStyle(SpottrTheme.textPrimary)
+
+                let detail = exercise.formattedDetail(unit: store.weightUnit)
+                if !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(size: 12, weight: .medium, design: .rounded))
+                        .foregroundStyle(SpottrTheme.textMuted)
+                }
+            }
+
+            Spacer()
+
+            HStack(spacing: 6) {
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        store.moveExercise(in: store.selectedWeekday, exerciseId: exercise.id, direction: -1)
+                    }
+                } label: {
+                    Image(systemName: "chevron.up")
+                        .font(.system(size: 12, weight: .bold))
+                        .frame(width: 32, height: 32)
+                        .background(SpottrTheme.cardSubtle)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(index == 0)
+                .foregroundStyle(index == 0 ? SpottrTheme.textMuted.opacity(0.25) : SpottrTheme.accent)
+
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        store.moveExercise(in: store.selectedWeekday, exerciseId: exercise.id, direction: 1)
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 12, weight: .bold))
+                        .frame(width: 32, height: 32)
+                        .background(SpottrTheme.cardSubtle)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(index == currentRoutine.exercises.count - 1)
+                .foregroundStyle(index == currentRoutine.exercises.count - 1 ? SpottrTheme.textMuted.opacity(0.25) : SpottrTheme.accent)
+            }
+        }
+        .padding(14)
+        .background(SpottrTheme.card)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(draggedExerciseID == exercise.id ? SpottrTheme.accent : SpottrTheme.border, lineWidth: 1)
+        }
+        .onDrag {
+            draggedExerciseID = exercise.id
+            return NSItemProvider(object: exercise.id.uuidString as NSString)
+        }
+        .onDrop(of: [UTType.text], delegate: ExerciseDropDelegate(
+            item: exercise,
+            currentRoutine: currentRoutine,
+            draggedExerciseID: $draggedExerciseID,
+            moveAction: { fromIdx, toIdx in
+                withAnimation(.spring(response: 0.3)) {
+                    store.moveExercise(in: store.selectedWeekday, fromIndex: fromIdx, toIndex: toIdx)
+                }
+            }
+        ))
     }
 
     private var inlineExerciseEditor: some View {
@@ -270,15 +466,67 @@ struct SplitView: View {
                 .disabled(exerciseName.trimmingCharacters(in: .whitespaces).isEmpty)
             }
 
-            if let exerciseID = editingExerciseID {
-                Button(role: .destructive) {
-                    store.deleteExercise(from: store.selectedWeekday, exerciseId: exerciseID)
-                    cancelExerciseEditing()
-                } label: {
-                    Label("Delete Exercise", systemImage: "trash")
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
+            if let exerciseID = editingExerciseID,
+               let currentIndex = currentRoutine.exercises.firstIndex(where: { $0.id == exerciseID }) {
+                HStack {
+                    Button(role: .destructive) {
+                        store.deleteExercise(from: store.selectedWeekday, exerciseId: exerciseID)
+                        cancelExerciseEditing()
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
+                    }
+                    .foregroundStyle(.red)
+
+                    Spacer()
+
+                    if currentRoutine.exercises.count > 1 {
+                        HStack(spacing: 8) {
+                            Text("Position:")
+                                .font(.system(size: 11, weight: .bold, design: .rounded))
+                                .foregroundStyle(SpottrTheme.textMuted)
+
+                            Button {
+                                withAnimation(.spring(response: 0.3)) {
+                                    store.moveExercise(in: store.selectedWeekday, exerciseId: exerciseID, direction: -1)
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.up")
+                                    Text("Up")
+                                }
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(SpottrTheme.cardSubtle)
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(currentIndex == 0)
+                            .foregroundStyle(currentIndex == 0 ? SpottrTheme.textMuted.opacity(0.3) : SpottrTheme.accent)
+
+                            Button {
+                                withAnimation(.spring(response: 0.3)) {
+                                    store.moveExercise(in: store.selectedWeekday, exerciseId: exerciseID, direction: 1)
+                                }
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "chevron.down")
+                                    Text("Down")
+                                }
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 6)
+                                .background(SpottrTheme.cardSubtle)
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(currentIndex == currentRoutine.exercises.count - 1)
+                            .foregroundStyle(currentIndex == currentRoutine.exercises.count - 1 ? SpottrTheme.textMuted.opacity(0.3) : SpottrTheme.accent)
+                        }
+                    }
                 }
-                .foregroundStyle(.red)
+                .padding(.top, 4)
             }
         }
         .spottrCard(padding: 14)
@@ -308,6 +556,7 @@ struct SplitView: View {
     private func select(weekday: Weekday) {
         withAnimation(.spring(response: 0.3)) {
             store.selectedWeekday = weekday
+            isReordering = false
             cancelExerciseEditing()
             focusedField = nil
         }
@@ -315,6 +564,7 @@ struct SplitView: View {
 
     private func beginAddingExercise() {
         withAnimation(.spring(response: 0.3)) {
+            isReordering = false
             editingExerciseID = nil
             isAddingExercise = true
             exerciseName = ""
@@ -325,6 +575,7 @@ struct SplitView: View {
 
     private func beginEditing(_ exercise: ExerciseItem) {
         withAnimation(.spring(response: 0.3)) {
+            isReordering = false
             isAddingExercise = false
             editingExerciseID = exercise.id
             exerciseName = exercise.name
@@ -358,6 +609,66 @@ struct SplitView: View {
                 focusedField = nil
             }
         }
+    }
+
+    private var availableWorkoutDays: [Weekday] {
+        store.orderedWeekdays.filter { weekday in
+            guard weekday != store.selectedWeekday else { return false }
+            let r = store.routine(for: weekday)
+            return !r.isRestDay && (!r.title.trimmingCharacters(in: .whitespaces).isEmpty || !r.exercises.isEmpty)
+        }
+    }
+
+    @ViewBuilder
+    private var copyWorkoutDaysMenu: some View {
+        if availableWorkoutDays.isEmpty {
+            Button {} label: {
+                Label("No other workout days to copy", systemImage: "info.circle")
+            }
+            .disabled(true)
+        } else {
+            Section("Copy Workout Day") {
+                ForEach(availableWorkoutDays) { weekday in
+                    let routine = store.routine(for: weekday)
+                    Button {
+                        withAnimation(.spring(response: 0.3)) {
+                            focusedField = nil
+                            store.copyRoutine(from: weekday, to: store.selectedWeekday)
+                        }
+                    } label: {
+                        let workoutTitle = routine.title.isEmpty ? "Workout Day" : routine.title
+                        let countStr = routine.exercises.count == 1 ? "1 exercise" : "\(routine.exercises.count) exercises"
+                        Label("\(weekday.fullName): \(workoutTitle) (\(countStr))", systemImage: "dumbbell.fill")
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Exercise Drop Delegate for Drag & Drop Reordering
+struct ExerciseDropDelegate: DropDelegate {
+    let item: ExerciseItem
+    let currentRoutine: DayRoutine
+    @Binding var draggedExerciseID: UUID?
+    let moveAction: (Int, Int) -> Void
+
+    func dropEntered(info: DropInfo) {
+        guard let draggedID = draggedExerciseID,
+              draggedID != item.id,
+              let from = currentRoutine.exercises.firstIndex(where: { $0.id == draggedID }),
+              let to = currentRoutine.exercises.firstIndex(where: { $0.id == item.id }) else { return }
+
+        moveAction(from, to)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedExerciseID = nil
+        return true
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
     }
 }
 

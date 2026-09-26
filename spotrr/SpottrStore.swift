@@ -264,19 +264,40 @@ final class SpottrStore: ObservableObject {
         generator.impactOccurred()
     }
 
-    // MARK: - Export Split (Notes Style)
-    func exportSplitAsText() -> String {
+    // MARK: - Export Split (Customizable)
+    func exportSplitAsText(
+        includeRestDays: Bool = true,
+        includeExercises: Bool = true,
+        includeWeights: Bool = true
+    ) -> String {
         var output = "My Weekly Split on Spottr 🏋️‍♂️\n\n"
-        
+
         for weekday in orderedWeekdays {
             let r = routine(for: weekday)
-            let dayName = String(weekday.fullName.prefix(3))
+
+            if r.isRestDay && !includeRestDays {
+                continue
+            }
+
+            let dayName = weekday.fullName
             let splitTitle = r.isRestDay ? "Rest Day" : (r.title.isEmpty ? "Workout" : r.title)
-            
-            output += "\(dayName): \(splitTitle)\n"
+
+            output += "\(dayName.uppercased()): \(splitTitle)\n"
+
+            if includeExercises {
+                if !r.isRestDay && !r.exercises.isEmpty {
+                    for ex in r.exercises {
+                        let weightText = (includeWeights && !ex.weight.isEmpty) ? " @ \(ex.weight) \(weightUnit.rawValue)" : ""
+                        output += "   • \(ex.name)\(weightText)\n"
+                    }
+                    output += "\n"
+                } else {
+                    output += "\n"
+                }
+            }
         }
-        
-        return output
+
+        return output.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     func clearSplit() {

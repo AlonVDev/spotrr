@@ -15,38 +15,18 @@ struct BuddiesView: View {
             ZStack {
                 SpottrTheme.background.ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: 16) {
-                        // Search Bar
-                        searchBar
+                VStack(spacing: 12) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 40, weight: .semibold))
+                        .foregroundStyle(SpottrTheme.accent)
 
-                        if viewModel.isSearching {
-                            searchResultsSection
-                        } else {
-                            if !viewModel.pendingReceivedRequests.isEmpty {
-                                pendingRequestsSection
-                            }
-
-                            if !viewModel.activeFriends.isEmpty {
-                                myBuddiesSection
-                            }
-
-                            if viewModel.hasNoBuddiesOrRequests {
-                                emptyStateCard
-                            }
-                        }
-
-                        Spacer().frame(height: 40)
-                    }
-                    .padding(.horizontal, 16)
-                    .padding(.top, 12)
+                    Text("Coming Soon")
+                        .font(.system(size: 22, weight: .bold, design: .rounded))
+                        .foregroundStyle(SpottrTheme.textPrimary)
                 }
             }
             .navigationTitle("Buddies")
             .navigationBarTitleDisplayMode(.inline)
-            .onAppear {
-                viewModel.loadData()
-            }
         }
     }
 

@@ -102,7 +102,31 @@ struct ExerciseItem: Identifiable, Codable, Hashable {
     var name: String
     var weight: String = "" // e.g. "185"
     var reps: String = ""   // e.g. "8–10"
+    var notes: String = ""  // e.g. "Drop set on last set"
     var isCompleted: Bool = false
+
+    enum CodingKeys: CodingKey {
+        case id, name, weight, reps, notes, isCompleted
+    }
+
+    init(id: UUID = UUID(), name: String, weight: String = "", reps: String = "", notes: String = "", isCompleted: Bool = false) {
+        self.id = id
+        self.name = name
+        self.weight = weight
+        self.reps = reps
+        self.notes = notes
+        self.isCompleted = isCompleted
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decode(String.self, forKey: .name)
+        weight = try container.decodeIfPresent(String.self, forKey: .weight) ?? ""
+        reps = try container.decodeIfPresent(String.self, forKey: .reps) ?? ""
+        notes = try container.decodeIfPresent(String.self, forKey: .notes) ?? ""
+        isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
+    }
 
     func formattedDetail(unit: WeightUnit) -> String {
         var parts: [String] = []
@@ -118,8 +142,20 @@ struct ExerciseItem: Identifiable, Codable, Hashable {
         if !trimmedReps.isEmpty {
             parts.append("\(trimmedReps) reps")
         }
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespaces)
+        if !trimmedNotes.isEmpty {
+            parts.append(trimmedNotes)
+        }
         return parts.joined(separator: " • ")
     }
+}
+
+// MARK: - Routine Link (Shared Workout Routine)
+struct RoutineLink: Identifiable, Codable, Hashable {
+    var id: UUID = UUID()
+    var name: String
+    var assignedDays: [Weekday] = []
+    var exercises: [ExerciseItem] = []
 }
 
 // MARK: - Day Routine
@@ -129,6 +165,7 @@ struct DayRoutine: Identifiable, Codable, Hashable {
     var title: String
     var isRestDay: Bool = false
     var exercises: [ExerciseItem] = []
+    var routineLinkId: UUID? = nil
 
     var completedCount: Int {
         exercises.filter { $0.isCompleted }.count

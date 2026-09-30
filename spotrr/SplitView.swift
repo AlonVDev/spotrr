@@ -17,7 +17,14 @@ struct SplitView: View {
     @State private var exerciseWeight = ""
     @State private var isReordering = false
     @State private var draggedExerciseID: UUID?
+    @State private var autoLinkCandidate: AutoLinkCandidate? = nil
     @FocusState private var focusedField: Field?
+
+    private struct AutoLinkCandidate: Identifiable {
+        var id: String { title }
+        let title: String
+        let matchingDays: [Weekday]
+    }
 
     private enum Field: Hashable {
         case title, exerciseName, exerciseWeight
@@ -63,8 +70,26 @@ struct SplitView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 12)
                 }
+                .onChange(of: focusedField) { oldValue, newValue in
+                    if oldValue == .title && newValue != .title {
+                        checkMatchingTitle()
+                    }
+                }
             }
             .navigationBarTitleDisplayMode(.inline)
+            .alert("Link to '\(autoLinkCandidate?.title ?? "")'?", isPresented: Binding(
+                get: { autoLinkCandidate != nil },
+                set: { if !$0 { autoLinkCandidate = nil } }
+            ), presenting: autoLinkCandidate) { candidate in
+                Button("Keep Standalone", role: .cancel) { autoLinkCandidate = nil }
+                Button("Link Days") {
+                    store.mergeAndLinkDays([store.selectedWeekday] + candidate.matchingDays, routineName: candidate.title)
+                    autoLinkCandidate = nil
+                }
+            } message: { candidate in
+                let daysStr = candidate.matchingDays.sorted().map { $0.fullName }.joined(separator: ", ")
+                Text("\(daysStr) already uses the routine name '\(candidate.title)'. Linking will merge exercises so both days stay in sync.")
+            }
         }
     }
 
@@ -125,6 +150,9 @@ struct SplitView: View {
                         .foregroundStyle(currentRoutine.isRestDay ? SpottrTheme.restColor : SpottrTheme.textPrimary)
                         .focused($focusedField, equals: .title)
                         .submitLabel(.done)
+                        .onSubmit {
+                            checkMatchingTitle()
+                        }
 
                     if !currentRoutine.isRestDay && currentRoutine.title.trimmingCharacters(in: .whitespaces).isEmpty {
                         HStack(spacing: 6) {
@@ -140,7 +168,6 @@ struct SplitView: View {
                                     .font(.system(size: 14, weight: .black, design: .rounded))
                                     .foregroundStyle(SpottrTheme.textMuted)
                                     .padding(.vertical, 8)
-                                    .padding(.horizontal, 4)
                                     .contentShape(Rectangle())
                             }
                         }
@@ -162,6 +189,24 @@ struct SplitView: View {
                 .buttonStyle(.plain)
             }
 
+            // Symmetric linked routine badge (read-only; unlinking and management is in Settings)
+            if let link = store.routineLink(for: store.selectedWeekday), !currentRoutine.isRestDay {
+                HStack(spacing: 6) {
+                    Image(systemName: "link")
+                        .font(.system(size: 11, weight: .bold))
+                    let otherDays = link.assignedDays.filter { $0 != store.selectedWeekday }.sorted().map { $0.shortName }.joined(separator: ", ")
+                    Text("Linked: \(link.name)\(otherDays.isEmpty ? "" : " (\(otherDays))")")
+                        .font(.system(size: 11, weight: .bold, design: .rounded))
+
+                    Spacer()
+                }
+                .foregroundStyle(SpottrTheme.accent.opacity(0.85))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(SpottrTheme.accent.opacity(0.08))
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+
             if !currentRoutine.isRestDay && currentRoutine.totalCount > 0 {
                 GeometryReader { geo in
                     ZStack(alignment: .leading) {
@@ -176,6 +221,7 @@ struct SplitView: View {
         }
         .spottrCard()
     }
+
 
     private var exercisesSection: some View {
         VStack(spacing: 10) {
@@ -627,21 +673,29 @@ struct SplitView: View {
             }
             .disabled(true)
         } else {
-            Section("Copy Workout Day") {
-                ForEach(availableWorkoutDays) { weekday in
-                    let routine = store.routine(for: weekday)
-                    Button {
-                        withAnimation(.spring(response: 0.3)) {
-                            focusedField = nil
-                            store.copyRoutine(from: weekday, to: store.selectedWeekday)
-                        }
-                    } label: {
-                        let workoutTitle = routine.title.isEmpty ? "Workout Day" : routine.title
-                        let countStr = routine.exercises.count == 1 ? "1 exercise" : "\(routine.exercises.count) exercises"
-                        Label("\(weekday.fullName): \(workoutTitle) (\(countStr))", systemImage: "dumbbell.fill")
+            ForEach(availableWorkoutDays) { weekday in
+                let r = store.routine(for: weekday)
+                Button {
+                    withAnimation(.spring(response: 0.3)) {
+                        focusedField = nil
+                        store.copyAndLinkDay(from: weekday, to: store.selectedWeekday)
                     }
+                } label: {
+                    let workoutTitle = r.title.isEmpty ? weekday.fullName : r.title
+                    let countStr = r.exercises.count == 1 ? "1 exercise" : "\(r.exercises.count) exercises"
+                    let linked = r.routineLinkId != nil ? " 🔗" : ""
+                    Label("\(weekday.fullName): \(workoutTitle)\(linked) (\(countStr))", systemImage: "link")
                 }
             }
+        }
+    }
+
+    private func checkMatchingTitle() {
+        let title = currentRoutine.title.trimmingCharacters(in: .whitespaces)
+        guard !title.isEmpty, !currentRoutine.isRestDay else { return }
+
+        if let match = store.findMatchingDaysOrLink(for: store.selectedWeekday, title: title) {
+            autoLinkCandidate = AutoLinkCandidate(title: match.linkName, matchingDays: match.matchingDays)
         }
     }
 }

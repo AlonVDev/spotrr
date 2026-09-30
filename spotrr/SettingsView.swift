@@ -62,6 +62,24 @@ struct SettingsView: View {
                     }
                     .listRowBackground(SpottrTheme.card)
 
+                    // Library Section
+                    Section {
+                        NavigationLink(destination: ExerciseLibraryView()) {
+                            Label("Exercise Library", systemImage: "dumbbell.fill")
+                                .foregroundStyle(SpottrTheme.textPrimary)
+                        }
+
+                        NavigationLink(destination: LinkedRoutinesView()) {
+                            Label("Linked Routines", systemImage: "link")
+                                .foregroundStyle(SpottrTheme.textPrimary)
+                        }
+                    } header: {
+                        Text("LIBRARY")
+                            .font(.system(size: 11, weight: .heavy, design: .rounded))
+                            .foregroundStyle(SpottrTheme.textMuted)
+                    }
+                    .listRowBackground(SpottrTheme.card)
+
                     // Data Section
                     Section {
                         Button {
@@ -93,7 +111,7 @@ struct SettingsView: View {
                     // About Section
                     Section {
                         HStack {
-                            Text("Version")
+                            Label("Version", systemImage: "info.circle.fill")
                                 .foregroundStyle(SpottrTheme.textPrimary)
                             Spacer()
                             Text("1.0.0")

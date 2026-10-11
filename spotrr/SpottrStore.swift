@@ -14,11 +14,29 @@ final class SpottrStore: ObservableObject {
 
     // MARK: - Published State
     @Published var routines: [Weekday: DayRoutine] = [:] {
-        didSet { saveToStorage() }
+        didSet {
+            saveToStorage()
+            syncCurrentToActiveProfile()
+        }
     }
 
     @Published var routineLinks: [UUID: RoutineLink] = [:] {
-        didSet { saveRoutineLinks() }
+        didSet {
+            saveRoutineLinks()
+            syncCurrentToActiveProfile()
+        }
+    }
+
+    @Published var splitProfiles: [SplitProfile] = [] {
+        didSet { saveSplitProfiles() }
+    }
+
+    @Published var activeProfileId: UUID? = nil {
+        didSet {
+            if let id = activeProfileId {
+                UserDefaults.standard.set(id.uuidString, forKey: activeProfileIdKey)
+            }
+        }
     }
 
     @Published var selectedWeekday: Weekday = Weekday.today()
@@ -82,6 +100,8 @@ final class SpottrStore: ObservableObject {
 
     private let storageKey = "Spottr_WeeklyRoutines_v3"
     private let routineLinksStorageKey = "Spottr_RoutineLinks_v1"
+    private let splitProfilesStorageKey = "Spottr_SplitProfiles_v1"
+    private let activeProfileIdKey = "Spottr_ActiveProfileId_v1"
     private let unitStorageKey = "Spottr_WeightUnit"
     private let weekStartStorageKey = "Spottr_WeekStart"
     private let autoResetStorageKey = "Spottr_AutoResetDaily"
@@ -107,6 +127,7 @@ final class SpottrStore: ObservableObject {
             setupEmptyRoutines()
         }
         loadRoutineLinks()
+        loadSplitProfiles()
         checkAndPerformDailyReset()
     }
 
@@ -139,6 +160,151 @@ final class SpottrStore: ObservableObject {
         routines[updated.weekday] = updated
     }
 
+    // MARK: - Split Profiles System
+
+    var activeProfile: SplitProfile? {
+        if let id = activeProfileId {
+            return splitProfiles.first { $0.id == id }
+        }
+        return splitProfiles.first { $0.isActive }
+    }
+
+    private func syncCurrentToActiveProfile() {
+        guard let activeId = activeProfileId ?? splitProfiles.first(where: { $0.isActive })?.id,
+              let index = splitProfiles.firstIndex(where: { $0.id == activeId }) else { return }
+
+        splitProfiles[index].routines = routines
+        splitProfiles[index].routineLinks = routineLinks
+
+        var slots: [Weekday: RoutineLink] = [:]
+        for weekday in Weekday.allCases {
+            if let linkId = routines[weekday]?.routineLinkId, let link = routineLinks[linkId] {
+                slots[weekday] = link
+            }
+        }
+        splitProfiles[index].scheduleSlots = slots
+    }
+
+    func activateProfile(id: UUID) {
+        guard let targetIndex = splitProfiles.firstIndex(where: { $0.id == id }) else { return }
+
+        // Sync old active profile before switching
+        syncCurrentToActiveProfile()
+
+        for i in splitProfiles.indices {
+            splitProfiles[i].isActive = (splitProfiles[i].id == id)
+        }
+        activeProfileId = id
+
+        let target = splitProfiles[targetIndex]
+        self.routines = target.routines
+        self.routineLinks = target.routineLinks
+
+        triggerHaptic(.medium)
+    }
+
+    func createProfile(name: String, duplicateCurrent: Bool) {
+        let cleanName = name.trimmingCharacters(in: .whitespaces)
+        let profileName = cleanName.isEmpty ? "New Split" : cleanName
+
+        let newRoutines = duplicateCurrent ? self.routines : [:]
+        let newLinks = duplicateCurrent ? self.routineLinks : [:]
+
+        var slots: [Weekday: RoutineLink] = [:]
+        for weekday in Weekday.allCases {
+            if let linkId = newRoutines[weekday]?.routineLinkId, let link = newLinks[linkId] {
+                slots[weekday] = link
+            }
+        }
+
+        let newProfile = SplitProfile(
+            name: profileName,
+            isActive: false,
+            scheduleSlots: slots,
+            routines: newRoutines,
+            routineLinks: newLinks
+        )
+
+        splitProfiles.append(newProfile)
+        triggerHaptic(.light)
+    }
+
+    func duplicateProfile(id: UUID) {
+        guard let source = splitProfiles.first(where: { $0.id == id }) else { return }
+        let copy = SplitProfile(
+            name: "\(source.name) (Copy)",
+            isActive: false,
+            scheduleSlots: source.scheduleSlots,
+            routines: source.routines,
+            routineLinks: source.routineLinks
+        )
+        splitProfiles.append(copy)
+        triggerHaptic(.light)
+    }
+
+    func renameProfile(id: UUID, name: String) {
+        guard let index = splitProfiles.firstIndex(where: { $0.id == id }) else { return }
+        let clean = name.trimmingCharacters(in: .whitespaces)
+        guard !clean.isEmpty else { return }
+        splitProfiles[index].name = clean
+        triggerHaptic(.light)
+    }
+
+    func deleteProfile(id: UUID) {
+        guard splitProfiles.count > 1 else { return }
+        guard let index = splitProfiles.firstIndex(where: { $0.id == id }) else { return }
+
+        let wasActive = splitProfiles[index].isActive || (activeProfileId == id)
+        splitProfiles.remove(at: index)
+
+        if wasActive, let first = splitProfiles.first {
+            activateProfile(id: first.id)
+        }
+        triggerHaptic(.medium)
+    }
+
+    private func loadSplitProfiles() {
+        if let data = UserDefaults.standard.data(forKey: splitProfilesStorageKey),
+           let decoded = try? JSONDecoder().decode([SplitProfile].self, from: data),
+           !decoded.isEmpty {
+            self.splitProfiles = decoded
+            if let savedActiveString = UserDefaults.standard.string(forKey: activeProfileIdKey),
+               let savedActiveId = UUID(uuidString: savedActiveString),
+               decoded.contains(where: { $0.id == savedActiveId }) {
+                self.activeProfileId = savedActiveId
+            } else if let active = decoded.first(where: { $0.isActive }) {
+                self.activeProfileId = active.id
+            } else {
+                self.activeProfileId = decoded.first?.id
+            }
+        } else {
+            // First run migration: seed current split as "Default Split"
+            var slots: [Weekday: RoutineLink] = [:]
+            for weekday in Weekday.allCases {
+                if let linkId = routines[weekday]?.routineLinkId, let link = routineLinks[linkId] {
+                    slots[weekday] = link
+                }
+            }
+
+            let defaultProfile = SplitProfile(
+                name: "Default Split",
+                isActive: true,
+                scheduleSlots: slots,
+                routines: routines,
+                routineLinks: routineLinks
+            )
+            self.splitProfiles = [defaultProfile]
+            self.activeProfileId = defaultProfile.id
+            saveSplitProfiles()
+        }
+    }
+
+    private func saveSplitProfiles() {
+        if let encoded = try? JSONEncoder().encode(splitProfiles) {
+            UserDefaults.standard.set(encoded, forKey: splitProfilesStorageKey)
+        }
+    }
+
     // MARK: - Symmetric Linked Routines
 
     /// Returns the RoutineLink for a given weekday if one is assigned.
@@ -157,11 +323,17 @@ final class SpottrStore: ObservableObject {
                 if result[existingIndex].weight.isEmpty && !item.weight.isEmpty {
                     result[existingIndex].weight = item.weight
                 }
+                if result[existingIndex].sets.isEmpty && !item.sets.isEmpty {
+                    result[existingIndex].sets = item.sets
+                }
                 if result[existingIndex].reps.isEmpty && !item.reps.isEmpty {
                     result[existingIndex].reps = item.reps
                 }
                 if result[existingIndex].notes.isEmpty && !item.notes.isEmpty {
                     result[existingIndex].notes = item.notes
+                }
+                if result[existingIndex].customVariables.isEmpty && !item.customVariables.isEmpty {
+                    result[existingIndex].customVariables = item.customVariables
                 }
             } else {
                 result.append(item)
@@ -407,12 +579,21 @@ final class SpottrStore: ObservableObject {
     // MARK: - Global Dynamic Exercise Library
 
     /// Dynamically updates an exercise across every day and routine link in the schedule.
-    func updateMasterExercise(originalName: String, newName: String, weight: String, reps: String, notes: String) {
+    func updateMasterExercise(
+        originalName: String,
+        newName: String,
+        weight: String,
+        sets: String = "",
+        reps: String,
+        notes: String,
+        customVariables: [ExerciseCustomVariable] = []
+    ) {
         let cleanOriginal = originalName.trimmingCharacters(in: .whitespaces).lowercased()
         let cleanNew = newName.trimmingCharacters(in: .whitespaces)
         guard !cleanOriginal.isEmpty, !cleanNew.isEmpty else { return }
 
         let cleanWeight = weight.trimmingCharacters(in: .whitespaces)
+        let cleanSets = sets.trimmingCharacters(in: .whitespaces)
         let cleanReps = reps.trimmingCharacters(in: .whitespaces)
         let cleanNotes = notes.trimmingCharacters(in: .whitespaces)
 
@@ -423,8 +604,10 @@ final class SpottrStore: ObservableObject {
                 if link.exercises[i].name.trimmingCharacters(in: .whitespaces).lowercased() == cleanOriginal {
                     link.exercises[i].name = cleanNew
                     link.exercises[i].weight = cleanWeight
+                    link.exercises[i].sets = cleanSets
                     link.exercises[i].reps = cleanReps
                     link.exercises[i].notes = cleanNotes
+                    link.exercises[i].customVariables = customVariables
                     changed = true
                 }
             }
@@ -441,8 +624,10 @@ final class SpottrStore: ObservableObject {
                 if r.exercises[i].name.trimmingCharacters(in: .whitespaces).lowercased() == cleanOriginal {
                     r.exercises[i].name = cleanNew
                     r.exercises[i].weight = cleanWeight
+                    r.exercises[i].sets = cleanSets
                     r.exercises[i].reps = cleanReps
                     r.exercises[i].notes = cleanNotes
+                    r.exercises[i].customVariables = customVariables
                     changed = true
                 }
             }
@@ -477,15 +662,25 @@ final class SpottrStore: ObservableObject {
 
     // MARK: - Exercise Mutations (Linked-Aware)
 
-    func addExercise(to weekday: Weekday, name: String, weight: String = "", reps: String = "", notes: String = "") {
+    func addExercise(
+        to weekday: Weekday,
+        name: String,
+        weight: String = "",
+        sets: String = "",
+        reps: String = "",
+        notes: String = "",
+        customVariables: [ExerciseCustomVariable] = []
+    ) {
         let cleanName = name.trimmingCharacters(in: .whitespaces)
         guard !cleanName.isEmpty else { return }
 
         let newExercise = ExerciseItem(
             name: cleanName,
             weight: weight.trimmingCharacters(in: .whitespaces),
+            sets: sets.trimmingCharacters(in: .whitespaces),
             reps: reps.trimmingCharacters(in: .whitespaces),
             notes: notes.trimmingCharacters(in: .whitespaces),
+            customVariables: customVariables,
             isCompleted: false
         )
 
@@ -671,7 +866,9 @@ final class SpottrStore: ObservableObject {
                 if !r.isRestDay && !r.exercises.isEmpty {
                     for ex in r.exercises {
                         let weightText = (includeWeights && !ex.weight.isEmpty) ? " @ \(ex.weight) \(weightUnit.rawValue)" : ""
-                        output += "   • \(ex.name)\(weightText)\n"
+                        let summary = ex.summaryLine(unit: weightUnit)
+                        let detailText = summary.isEmpty ? "" : " (\(summary))"
+                        output += "   • \(ex.name)\(weightText)\(detailText)\n"
                     }
                     output += "\n"
                 } else {
@@ -687,6 +884,444 @@ final class SpottrStore: ObservableObject {
         routineLinks = [:]
         setupEmptyRoutines()
         triggerHaptic(.medium)
+    }
+
+    // MARK: - Import Split Engine
+
+    func applyImportedSplit(
+        name: String,
+        routines: [Weekday: DayRoutine],
+        routineLinks: [UUID: RoutineLink] = [:],
+        asNewProfile: Bool = false
+    ) {
+        if asNewProfile {
+            var slots: [Weekday: RoutineLink] = [:]
+            for weekday in Weekday.allCases {
+                if let linkId = routines[weekday]?.routineLinkId, let link = routineLinks[linkId] {
+                    slots[weekday] = link
+                }
+            }
+            let profile = SplitProfile(
+                name: name,
+                isActive: false,
+                scheduleSlots: slots,
+                routines: routines,
+                routineLinks: routineLinks
+            )
+            splitProfiles.append(profile)
+            activateProfile(id: profile.id)
+        } else {
+            self.routines = routines
+            self.routineLinks = routineLinks
+            syncCurrentToActiveProfile()
+            triggerHaptic(.medium)
+        }
+    }
+
+    /// Parses text schedule (e.g. from Notes or message) into structured Spottr days.
+    func parseScheduleFromText(_ text: String) -> (name: String, routines: [Weekday: DayRoutine]) {
+        var result: [Weekday: DayRoutine] = [:]
+        for weekday in Weekday.allCases {
+            result[weekday] = DayRoutine(weekday: weekday, title: "", isRestDay: true, exercises: [])
+        }
+
+        let lines = text.components(separatedBy: .newlines)
+        var currentWeekday: Weekday? = nil
+
+        for rawLine in lines {
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { continue }
+
+            // Check if this line is a day header
+            if let matchedWeekday = detectWeekday(in: line) {
+                currentWeekday = matchedWeekday
+                var routine = result[matchedWeekday] ?? DayRoutine(weekday: matchedWeekday, title: "", isRestDay: false, exercises: [])
+
+                // Check title after weekday colon or dash
+                let titleCandidate = extractTitleAfterDay(line: line)
+                if titleCandidate.localizedCaseInsensitiveContains("rest") {
+                    routine.isRestDay = true
+                    routine.title = "Rest Day"
+                } else {
+                    routine.isRestDay = false
+                    routine.title = titleCandidate.isEmpty ? "Workout" : titleCandidate
+                }
+                result[matchedWeekday] = routine
+                continue
+            }
+
+            // Otherwise, if we have a current weekday, parse as exercise item
+            if let weekday = currentWeekday {
+                var routine = result[weekday] ?? DayRoutine(weekday: weekday, title: "Workout", isRestDay: false, exercises: [])
+                if let exercise = parseExerciseLine(line) {
+                    routine.isRestDay = false
+                    routine.exercises.append(exercise)
+                    result[weekday] = routine
+                }
+            }
+        }
+
+        return ("Imported Split", result)
+    }
+
+    private func detectWeekday(in line: String) -> Weekday? {
+        let lower = line.lowercased()
+        let prefixes: [(Weekday, [String])] = [
+            (.monday, ["monday", "mon: ", "mon -", "mon."]),
+            (.tuesday, ["tuesday", "tue: ", "tue -", "tues: ", "tue."]),
+            (.wednesday, ["wednesday", "wed: ", "wed -", "wed."]),
+            (.thursday, ["thursday", "thu: ", "thu -", "thur: ", "thurs: ", "thu."]),
+            (.friday, ["friday", "fri: ", "fri -", "fri."]),
+            (.saturday, ["saturday", "sat: ", "sat -", "sat."]),
+            (.sunday, ["sunday", "sun: ", "sun -", "sun."])
+        ]
+
+        for (day, keys) in prefixes {
+            for key in keys {
+                if lower.hasPrefix(key) || lower.starts(with: key) {
+                    return day
+                }
+            }
+        }
+
+        // Exact match check for "Mon", "Monday", etc.
+        let firstWord = lower.components(separatedBy: CharacterSet.alphanumerics.inverted).first ?? ""
+        for day in Weekday.allCases {
+            if day.fullName.lowercased() == firstWord || day.shortName.lowercased() == firstWord {
+                return day
+            }
+        }
+
+        return nil
+    }
+
+    private func extractTitleAfterDay(line: String) -> String {
+        let separators = [":", "-", "—"]
+        for sep in separators {
+            if let range = line.range(of: sep) {
+                let rest = line[range.upperBound...].trimmingCharacters(in: .whitespaces)
+                if !rest.isEmpty {
+                    return rest
+                }
+            }
+        }
+        return ""
+    }
+
+    private func parseExerciseLine(_ rawLine: String) -> ExerciseItem? {
+        var line = rawLine
+        // Strip bullet prefixes
+        let bullets = ["-", "•", "*", "1.", "2.", "3.", "4.", "5.", "6.", "7.", "8.", "9."]
+        for b in bullets {
+            if line.hasPrefix(b) {
+                line = String(line.dropFirst(b.count)).trimmingCharacters(in: .whitespaces)
+                break
+            }
+        }
+
+        guard !line.isEmpty else { return nil }
+
+        // Detect weight patterns e.g. "185 lbs", "185lbs", "@ 80kg", "80 kg"
+        var weight = ""
+        var sets = ""
+        var reps = ""
+        var notes = ""
+
+        // Check for parenthesized notes e.g. "(Drop set)"
+        if let start = line.firstIndex(of: "("), let end = line.firstIndex(of: ")"), start < end {
+            let noteContent = line[line.index(after: start)..<end]
+            notes = String(noteContent).trimmingCharacters(in: .whitespaces)
+            line.removeSubrange(start...end)
+            line = line.trimmingCharacters(in: .whitespaces)
+        }
+
+        // Parse sets x reps e.g. "3x10", "3 x 8-10", "4x8"
+        let pattern = #"(\d+)\s*[xX×]\s*(\d+[-–]?\d*)"#
+        if let regex = try? NSRegularExpression(pattern: pattern),
+           let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) {
+            if let setsRange = Range(match.range(at: 1), in: line),
+               let repsRange = Range(match.range(at: 2), in: line) {
+                sets = String(line[setsRange])
+                reps = String(line[repsRange])
+            }
+            if let matchRange = Range(match.range, in: line) {
+                line.removeSubrange(matchRange)
+                line = line.trimmingCharacters(in: .whitespaces)
+            }
+        }
+
+        // Parse weight e.g. "185 lbs", "80kg", "135#"
+        let weightPattern = #"(@?\s*)(\d+(\.\d+)?)\s*(lbs|kg|#)?"#
+        if let regex = try? NSRegularExpression(pattern: weightPattern),
+           let match = regex.firstMatch(in: line, range: NSRange(line.startIndex..., in: line)) {
+            if let valRange = Range(match.range(at: 2), in: line) {
+                weight = String(line[valRange])
+            }
+            if let matchRange = Range(match.range, in: line) {
+                line.removeSubrange(matchRange)
+                line = line.trimmingCharacters(in: .whitespaces)
+            }
+        }
+
+        // Clean leftover separators from name
+        var name = line
+        let cleanSeparators = [":", "-", "@", "—"]
+        for s in cleanSeparators {
+            if name.hasSuffix(s) { name = String(name.dropLast(s.count)).trimmingCharacters(in: .whitespaces) }
+            if name.hasPrefix(s) { name = String(name.dropFirst(s.count)).trimmingCharacters(in: .whitespaces) }
+        }
+
+        if name.isEmpty { return nil }
+
+        return ExerciseItem(
+            name: name,
+            weight: weight,
+            sets: sets.isEmpty ? "3" : sets,
+            reps: reps.isEmpty ? "8–10" : reps,
+            notes: notes,
+            customVariables: [],
+            isCompleted: false
+        )
+    }
+
+    /// Generates structured schedule for any buddy/friend from their profile.
+    func generateBuddySplit(for buddyName: String, splitTitle: String) -> (name: String, routines: [Weekday: DayRoutine]) {
+        var days: [Weekday: DayRoutine] = [:]
+
+        let titleLower = splitTitle.lowercased()
+
+        if titleLower.contains("push") {
+            days[.monday] = DayRoutine(
+                weekday: .monday,
+                title: "Push Day (Chest & Shoulders)",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Barbell Bench Press", weight: "185", sets: "3", reps: "8–10", notes: "Control the eccentric"),
+                    ExerciseItem(name: "Incline DB Press", weight: "70", sets: "3", reps: "10–12", notes: "30-degree incline"),
+                    ExerciseItem(name: "Overhead Shoulder Press", weight: "115", sets: "3", reps: "8–10"),
+                    ExerciseItem(name: "Cable Lateral Raise", weight: "25", sets: "4", reps: "12–15"),
+                    ExerciseItem(name: "Tricep Rope Pushdown", weight: "50", sets: "3", reps: "12–15")
+                ]
+            )
+            days[.tuesday] = DayRoutine(
+                weekday: .tuesday,
+                title: "Pull Day (Back & Biceps)",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Barbell Row", weight: "155", sets: "4", reps: "8–10"),
+                    ExerciseItem(name: "Lat Pulldown", weight: "140", sets: "3", reps: "10–12"),
+                    ExerciseItem(name: "Chest Supported Row", weight: "60", sets: "3", reps: "10–12"),
+                    ExerciseItem(name: "Incline Dumbbell Curl", weight: "30", sets: "3", reps: "10–12")
+                ]
+            )
+            days[.wednesday] = DayRoutine(
+                weekday: .wednesday,
+                title: "Leg Day (Quads & Calves)",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Barbell Squat", weight: "225", sets: "4", reps: "6–8"),
+                    ExerciseItem(name: "Leg Press", weight: "360", sets: "3", reps: "10–12"),
+                    ExerciseItem(name: "Leg Extension", weight: "110", sets: "3", reps: "12–15"),
+                    ExerciseItem(name: "Standing Calf Raise", weight: "140", sets: "4", reps: "15")
+                ]
+            )
+            days[.thursday] = DayRoutine(
+                weekday: .thursday,
+                title: "Push Day (Hypertrophy)",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Dumbbell Bench Press", weight: "80", sets: "3", reps: "10–12"),
+                    ExerciseItem(name: "Dips", weight: "BW", sets: "3", reps: "10–12"),
+                    ExerciseItem(name: "DB Lateral Raise", weight: "25", sets: "4", reps: "15")
+                ]
+            )
+            days[.friday] = DayRoutine(
+                weekday: .friday,
+                title: "Pull Day (Hypertrophy)",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Neutral Grip Pull-Up", weight: "BW", sets: "3", reps: "8–10"),
+                    ExerciseItem(name: "Seated Cable Row", weight: "130", sets: "3", reps: "10–12"),
+                    ExerciseItem(name: "Hammer Curl", weight: "35", sets: "3", reps: "10–12")
+                ]
+            )
+            days[.saturday] = DayRoutine(
+                weekday: .saturday,
+                title: "Legs & Core",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Romanian Deadlift", weight: "185", sets: "3", reps: "8–10"),
+                    ExerciseItem(name: "Lying Leg Curl", weight: "90", sets: "3", reps: "10–12")
+                ]
+            )
+            days[.sunday] = DayRoutine(weekday: .sunday, title: "Rest Day", isRestDay: true, exercises: [])
+        } else if titleLower.contains("leg") || titleLower.contains("glute") {
+            days[.monday] = DayRoutine(
+                weekday: .monday,
+                title: "Glutes & Hamstrings",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Barbell Hip Thrust", weight: "225", sets: "4", reps: "10–12", notes: "Pause 2s at top"),
+                    ExerciseItem(name: "Romanian Deadlift", weight: "135", sets: "3", reps: "10–12"),
+                    ExerciseItem(name: "Bulgarian Split Squats", weight: "40", sets: "3", reps: "8–10"),
+                    ExerciseItem(name: "Cable Glute Kickbacks", weight: "25", sets: "3", reps: "15")
+                ]
+            )
+            days[.tuesday] = DayRoutine(
+                weekday: .tuesday,
+                title: "Upper Body & Arms",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Dumbbell Shoulder Press", weight: "35", sets: "3", reps: "10"),
+                    ExerciseItem(name: "Lat Pulldown", weight: "95", sets: "3", reps: "10–12"),
+                    ExerciseItem(name: "Push-ups", weight: "BW", sets: "3", reps: "12")
+                ]
+            )
+            days[.wednesday] = DayRoutine(weekday: .wednesday, title: "Rest Day", isRestDay: true, exercises: [])
+            days[.thursday] = DayRoutine(
+                weekday: .thursday,
+                title: "Quads & Glutes",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Barbell Squat", weight: "155", sets: "4", reps: "8–10"),
+                    ExerciseItem(name: "Leg Press", weight: "270", sets: "3", reps: "10–12"),
+                    ExerciseItem(name: "Walking Lunges", weight: "30", sets: "3", reps: "12/leg")
+                ]
+            )
+            days[.friday] = DayRoutine(
+                weekday: .friday,
+                title: "Back & Shoulders",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Seated Cable Row", weight: "85", sets: "3", reps: "10–12"),
+                    ExerciseItem(name: "Lateral Raises", weight: "15", sets: "4", reps: "15")
+                ]
+            )
+            days[.saturday] = DayRoutine(weekday: .saturday, title: "Full Body Mobility", isRestDay: true, exercises: [])
+            days[.sunday] = DayRoutine(weekday: .sunday, title: "Rest Day", isRestDay: true, exercises: [])
+        } else {
+            // General balanced split
+            days[.monday] = DayRoutine(
+                weekday: .monday,
+                title: splitTitle.isEmpty ? "Upper Power" : splitTitle,
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Bench Press", weight: "175", sets: "4", reps: "6–8"),
+                    ExerciseItem(name: "Barbell Row", weight: "145", sets: "4", reps: "6–8"),
+                    ExerciseItem(name: "Overhead Press", weight: "105", sets: "3", reps: "8–10")
+                ]
+            )
+            days[.tuesday] = DayRoutine(
+                weekday: .tuesday,
+                title: "Lower Power",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Squats", weight: "225", sets: "4", reps: "6–8"),
+                    ExerciseItem(name: "Romanian Deadlift", weight: "185", sets: "3", reps: "8–10")
+                ]
+            )
+            days[.wednesday] = DayRoutine(weekday: .wednesday, title: "Rest Day", isRestDay: true, exercises: [])
+            days[.thursday] = DayRoutine(
+                weekday: .thursday,
+                title: "Upper Hypertrophy",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Incline DB Press", weight: "65", sets: "3", reps: "10–12"),
+                    ExerciseItem(name: "Lat Pulldown", weight: "135", sets: "3", reps: "10–12")
+                ]
+            )
+            days[.friday] = DayRoutine(
+                weekday: .friday,
+                title: "Lower Hypertrophy",
+                isRestDay: false,
+                exercises: [
+                    ExerciseItem(name: "Leg Press", weight: "320", sets: "3", reps: "12–15"),
+                    ExerciseItem(name: "Hamstring Curl", weight: "90", sets: "3", reps: "12–15")
+                ]
+            )
+            days[.saturday] = DayRoutine(weekday: .saturday, title: "Rest Day", isRestDay: true, exercises: [])
+            days[.sunday] = DayRoutine(weekday: .sunday, title: "Rest Day", isRestDay: true, exercises: [])
+        }
+
+        return ("\(buddyName)'s Routine", days)
+    }
+
+    func exportCurrentSplitAsJSON() -> String {
+        let exportData: [String: Any] = [
+            "version": 1,
+            "profileName": activeProfile?.name ?? "My Split",
+            "routines": Array(routines.values).map { r in
+                [
+                    "weekday": r.weekday.rawValue,
+                    "title": r.title,
+                    "isRestDay": r.isRestDay,
+                    "exercises": r.exercises.map { ex in
+                        [
+                            "name": ex.name,
+                            "weight": ex.weight,
+                            "sets": ex.sets,
+                            "reps": ex.reps,
+                            "notes": ex.notes
+                        ]
+                    }
+                ]
+            }
+        ]
+
+        if let data = try? JSONSerialization.data(withJSONObject: exportData, options: .prettyPrinted),
+           let string = String(data: data, encoding: .utf8) {
+            return string
+        }
+        return "{}"
+    }
+
+    func parseSplitFromJSON(_ jsonString: String) -> (name: String, routines: [Weekday: DayRoutine])? {
+        guard let data = jsonString.data(using: .utf8),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let routinesArray = obj["routines"] as? [[String: Any]] else {
+            return nil
+        }
+
+        let name = (obj["profileName"] as? String) ?? "Imported Split"
+        var map: [Weekday: DayRoutine] = [:]
+
+        for rDict in routinesArray {
+            guard let rawW = rDict["weekday"] as? Int, let weekday = Weekday(rawValue: rawW) else { continue }
+            let title = (rDict["title"] as? String) ?? ""
+            let isRest = (rDict["isRestDay"] as? Bool) ?? false
+            var exercises: [ExerciseItem] = []
+
+            if let exArray = rDict["exercises"] as? [[String: Any]] {
+                for exDict in exArray {
+                    let exName = (exDict["name"] as? String) ?? ""
+                    guard !exName.isEmpty else { continue }
+                    let weight = (exDict["weight"] as? String) ?? ""
+                    let sets = (exDict["sets"] as? String) ?? ""
+                    let reps = (exDict["reps"] as? String) ?? ""
+                    let notes = (exDict["notes"] as? String) ?? ""
+
+                    exercises.append(ExerciseItem(
+                        name: exName,
+                        weight: weight,
+                        sets: sets,
+                        reps: reps,
+                        notes: notes,
+                        customVariables: [],
+                        isCompleted: false
+                    ))
+                }
+            }
+
+            map[weekday] = DayRoutine(weekday: weekday, title: title, isRestDay: isRest, exercises: exercises)
+        }
+
+        for weekday in Weekday.allCases {
+            if map[weekday] == nil {
+                map[weekday] = DayRoutine(weekday: weekday, title: "", isRestDay: true, exercises: [])
+            }
+        }
+
+        return (name, map)
     }
 
     // MARK: - Persistence (UserDefaults)

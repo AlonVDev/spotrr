@@ -11,6 +11,7 @@ struct SettingsView: View {
     @EnvironmentObject var store: SpottrStore
     @State private var showClearConfirmation: Bool = false
     @State private var showExportSheet: Bool = false
+    @State private var showImportSheet: Bool = false
 
     var body: some View {
         NavigationStack {
@@ -73,8 +74,13 @@ struct SettingsView: View {
                             Label("Linked Routines", systemImage: "link")
                                 .foregroundStyle(SpottrTheme.textPrimary)
                         }
+
+                        NavigationLink(destination: SplitProfilesView()) {
+                            Label("Split Profiles", systemImage: "rectangle.stack.fill")
+                                .foregroundStyle(SpottrTheme.textPrimary)
+                        }
                     } header: {
-                        Text("LIBRARY")
+                        Text("ROUTINES & LIBRARY")
                             .font(.system(size: 11, weight: .heavy, design: .rounded))
                             .foregroundStyle(SpottrTheme.textMuted)
                     }
@@ -87,6 +93,19 @@ struct SettingsView: View {
                         } label: {
                             HStack {
                                 Label("Export & Share Split", systemImage: "square.and.arrow.up.fill")
+                                    .foregroundStyle(SpottrTheme.textPrimary)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundStyle(SpottrTheme.textMuted)
+                            }
+                        }
+
+                        Button {
+                            showImportSheet = true
+                        } label: {
+                            HStack {
+                                Label("Import Split", systemImage: "arrow.down.doc.fill")
                                     .foregroundStyle(SpottrTheme.textPrimary)
                                 Spacer()
                                 Image(systemName: "chevron.right")
@@ -137,6 +156,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showExportSheet) {
                 ExportSplitSheet()
+            }
+            .sheet(isPresented: $showImportSheet) {
+                ImportSplitSheet()
             }
         }
     }

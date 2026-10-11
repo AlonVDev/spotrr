@@ -18,6 +18,8 @@ struct SplitView: View {
     @State private var isReordering = false
     @State private var draggedExerciseID: UUID?
     @State private var autoLinkCandidate: AutoLinkCandidate? = nil
+    @State private var showAddExerciseSheet = false
+    @State private var exerciseFormSheetItem: MasterExercise? = nil
     @FocusState private var focusedField: Field?
 
     private struct AutoLinkCandidate: Identifiable {
@@ -304,49 +306,22 @@ struct SplitView: View {
     }
 
     private func exerciseRow(_ exercise: ExerciseItem) -> some View {
-        HStack(spacing: 12) {
-            Button {
+        CompactExerciseCardView(
+            name: exercise.name,
+            workingWeight: exercise.formattedWorkingWeight(unit: store.weightUnit),
+            summaryLine: exercise.summaryLine(unit: store.weightUnit),
+            notes: exercise.notes,
+            isCompleted: exercise.isCompleted,
+            showCheckbox: true,
+            onToggleCompleted: {
                 withAnimation(.spring(response: 0.25)) {
                     store.toggleExercise(weekday: store.selectedWeekday, exerciseId: exercise.id)
                 }
-            } label: {
-                Image(systemName: exercise.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 24, weight: .semibold))
-                    .foregroundStyle(exercise.isCompleted ? SpottrTheme.accent : SpottrTheme.textMuted)
+            },
+            onEdit: {
+                openExerciseForm(exercise)
             }
-            .buttonStyle(.plain)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(exercise.name)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(exercise.isCompleted ? SpottrTheme.textMuted : SpottrTheme.textPrimary)
-                    .strikethrough(exercise.isCompleted, color: SpottrTheme.textMuted)
-
-                let detail = exercise.formattedDetail(unit: store.weightUnit)
-                if !detail.isEmpty {
-                    Text(detail)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(SpottrTheme.textMuted)
-                }
-            }
-
-            Spacer()
-
-            Image(systemName: "pencil")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(SpottrTheme.textMuted)
-        }
-        .padding(14)
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .onTapGesture {
-            beginEditing(exercise)
-        }
-        .background(SpottrTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(exercise.isCompleted ? SpottrTheme.accent.opacity(0.3) : SpottrTheme.border, lineWidth: 1)
-        }
+        )
         .onDrag {
             draggedExerciseID = exercise.id
             return NSItemProvider(object: exercise.id.uuidString as NSString)
@@ -385,7 +360,7 @@ struct SplitView: View {
             }
 
             Button {
-                beginEditing(exercise)
+                openExerciseForm(exercise)
             } label: {
                 Label("Edit", systemImage: "pencil")
             }
@@ -399,36 +374,30 @@ struct SplitView: View {
     }
 
     private func reorderExerciseRow(_ exercise: ExerciseItem, index: Int) -> some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             Image(systemName: "line.3.horizontal")
-                .font(.system(size: 16, weight: .semibold))
+                .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(SpottrTheme.textMuted)
-                .frame(width: 24)
+                .frame(width: 20)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(exercise.name)
-                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                    .foregroundStyle(SpottrTheme.textPrimary)
+            CompactExerciseCardView(
+                name: exercise.name,
+                workingWeight: exercise.formattedWorkingWeight(unit: store.weightUnit),
+                summaryLine: exercise.summaryLine(unit: store.weightUnit),
+                notes: exercise.notes,
+                isCompleted: exercise.isCompleted,
+                showCheckbox: false
+            )
 
-                let detail = exercise.formattedDetail(unit: store.weightUnit)
-                if !detail.isEmpty {
-                    Text(detail)
-                        .font(.system(size: 12, weight: .medium, design: .rounded))
-                        .foregroundStyle(SpottrTheme.textMuted)
-                }
-            }
-
-            Spacer()
-
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 Button {
                     withAnimation(.spring(response: 0.3)) {
                         store.moveExercise(in: store.selectedWeekday, exerciseId: exercise.id, direction: -1)
                     }
                 } label: {
                     Image(systemName: "chevron.up")
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(width: 32, height: 32)
+                        .font(.system(size: 11, weight: .bold))
+                        .frame(width: 28, height: 28)
                         .background(SpottrTheme.cardSubtle)
                         .clipShape(Circle())
                 }
@@ -442,8 +411,8 @@ struct SplitView: View {
                     }
                 } label: {
                     Image(systemName: "chevron.down")
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(width: 32, height: 32)
+                        .font(.system(size: 11, weight: .bold))
+                        .frame(width: 28, height: 28)
                         .background(SpottrTheme.cardSubtle)
                         .clipShape(Circle())
                 }
@@ -452,11 +421,11 @@ struct SplitView: View {
                 .foregroundStyle(index == currentRoutine.exercises.count - 1 ? SpottrTheme.textMuted.opacity(0.25) : SpottrTheme.accent)
             }
         }
-        .padding(14)
+        .padding(6)
         .background(SpottrTheme.card)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .stroke(draggedExerciseID == exercise.id ? SpottrTheme.accent : SpottrTheme.border, lineWidth: 1)
         }
         .onDrag {
@@ -609,25 +578,25 @@ struct SplitView: View {
     }
 
     private func beginAddingExercise() {
-        withAnimation(.spring(response: 0.3)) {
-            isReordering = false
-            editingExerciseID = nil
-            isAddingExercise = true
-            exerciseName = ""
-            exerciseWeight = ""
-            focusedField = .exerciseName
-        }
+        showAddExerciseSheet = true
+    }
+
+    private func openExerciseForm(_ exercise: ExerciseItem) {
+        let master = MasterExercise(
+            name: exercise.name,
+            weight: exercise.weight,
+            sets: exercise.sets,
+            reps: exercise.reps,
+            notes: exercise.notes,
+            customVariables: exercise.customVariables,
+            usedInDays: [store.selectedWeekday],
+            usedInRoutines: [currentRoutine.title]
+        )
+        exerciseFormSheetItem = master
     }
 
     private func beginEditing(_ exercise: ExerciseItem) {
-        withAnimation(.spring(response: 0.3)) {
-            isReordering = false
-            isAddingExercise = false
-            editingExerciseID = exercise.id
-            exerciseName = exercise.name
-            exerciseWeight = exercise.weight
-            focusedField = .exerciseName
-        }
+        openExerciseForm(exercise)
     }
 
     private func saveExercise() {
